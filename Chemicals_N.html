@@ -72,6 +72,11 @@
     <div class="grid">
         <div class="box">
             <h3>1. 기본 정보 입력</h3>
+            
+            <div class="input-group">
+                <label>약품 검색 (이름 또는 분자식)</label>
+                <input type="text" id="chemSearch" placeholder="예: 황산, h2so4" oninput="renderChemSelect()" style="margin-bottom: 10px; border-color: #76a8cb; box-shadow: 0 0 4px rgba(0,86,179,0.1);">
+            </div>        
             <div class="input-group">
                 <label>약품 선택 (기본 55종 + 추가 약품)</label>
                 <div style="display: flex; gap: 10px;">
@@ -252,23 +257,44 @@ function updateGlobalChemData() {
     renderChemSelect();
 }
 
+// 검색어에 맞춰 드롭다운 목록을 실시간으로 그려주는 함수
 function renderChemSelect() {
     const select = document.getElementById('chemSelect');
-    const currentValue = select.value;
-    select.innerHTML = '';
-    chemData.forEach((chem, index) => {
-        let option = document.createElement('option');
-        option.value = index;
-        let prefix = index >= 55 ? "[추가됨] " : "";
-        option.text = `${index + 1}. ${prefix}${chem.name} (${chem.formula})`;
-        select.appendChild(option);
-    });
-    // 데이터가 갱신되어도 기존에 선택된 값을 유지
-    if(currentValue && currentValue < chemData.length) {
-        select.value = currentValue;
-    }
-}
+    const searchInput = document.getElementById('chemSearch');
+    const keyword = searchInput ? searchInput.value.toLowerCase().trim() : "";
 
+    const currentValue = select.value;
+    select.innerHTML = ''; // 목록 초기화
+
+    let firstMatchIndex = -1; // 검색된 첫 번째 약품을 기억할 변수
+
+    // chemData 배열을 돌면서 검색어가 포함된 것만 뽑아냅니다.
+    chemData.forEach((chem, index) => {
+        // 이름(황산)이나 분자식(H2SO4)으로 모두 검색 가능하도록 합침
+        const searchTarget = `${chem.name} ${chem.formula}`.toLowerCase();
+        
+        if (!keyword || searchTarget.includes(keyword)) {
+            if (firstMatchIndex === -1) firstMatchIndex = index;
+            
+            let option = document.createElement('option');
+            // 🔥 핵심: 목록이 줄어들어도 원래 약품의 고유 번호(index)를 value로 유지합니다!
+            option.value = index; 
+            let prefix = index >= 55 ? "[추가됨] " : "";
+            option.text = `${index + 1}. ${prefix}${chem.name} (${chem.formula})`;
+            select.appendChild(option);
+        }
+    });
+
+    // 목록이 갱신된 후 선택값 처리
+    if (currentValue && Array.from(select.options).some(opt => opt.value === currentValue)) {
+        select.value = currentValue; // 기존에 선택했던 약품이 검색 결과에 있으면 유지
+    } else if (firstMatchIndex !== -1) {
+        select.value = firstMatchIndex; // 없으면 검색된 첫 번째 약품을 자동 선택
+    }
+
+    calculate(); // 목록이 바뀌었으니 계산 결과도 즉시 갱신
+}
+    
 // 사용자 맞춤 약품 추가하기 로직
 function addNewChemical() {
     const name = document.getElementById('addName').value.trim();
@@ -592,4 +618,5 @@ document.getElementById('syncDownBtn').addEventListener('click', () => {
 </script>
 
 </body>
+
 </html>
