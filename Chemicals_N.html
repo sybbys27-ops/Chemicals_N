@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>약품 농도 & 비중 자동 계산기 (최종 완성본)</title>
+    <style>
+        body { font-family: 'Malgun Gothic', sans-serif; background-color: #f4f7f6; margin: 0; padding: 20px; user-select: none; }
+        .container { max-width: 950px; margin: 0 auto; background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        h1 { text-align: center; color: #333; font-size: 24px; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px; }
+        .box { background: #f9fbfb; padding: 20px; border: 1px solid #ddd; border-radius: 6px; position: relative; }
+        .box h3 { margin-top: 0; color: #0056b3; border-bottom: 2px solid #0056b3; padding-bottom: 5px; font-size: 17px; }
+        .input-group { margin-bottom: 12px; }
+        label { display: block; font-weight: bold; margin-bottom: 4px; font-size: 13px; color: #444; }
+        select, input { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        .result-item { margin-bottom: 8px; font-size: 15px; }
+        .result-item span { font-weight: bold; color: #d9534f; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: center; font-size: 14px; }
+        th { background-color: #f2f2f2; }
+        
+        /* 약품 추가 폼 및 버튼 스타일 */
+        .add-form-container { margin-top: 25px; padding: 15px; background: #eef2f5; border: 1px dashed #7a9cb8; border-radius: 6px; }
+        .add-form-container h4 { margin-top: 0; color: #333; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;}
+        .data-row { display: flex; gap: 10px; margin-bottom: 5px; }
+        .data-row input { flex: 1; }
+        button { background: #0056b3; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; width: 100%; margin-top: 10px; }
+        button:hover { background: #004494; }
+        
+        #btnDelete { background: #d9534f; width: auto; margin-top: 0; padding: 8px 15px; }
+        #btnDelete:hover { background: #c9302c; }
+
+        .util-btn { background: #76a8cb; width: auto; padding: 5px 10px; font-size: 12px; margin-top: 0; }
+        .util-btn:hover { background: #42484d; }
+
+
+
+/* 👇 추가: 자체 설정창(Modal) 디자인 👇 */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.7); backdrop-filter: blur(2px);
+            display: none; align-items: center; justify-content: center;
+            z-index: 9999;
+        }
+        .modal-box {
+            background: #fff; padding: 20px; border-radius: 8px;
+            border: 1px solid #ccc; width: 300px;
+            display: flex; flex-direction: column; gap: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            box-sizing: border-box;
+        }
+        .modal-box label { font-size: 13px; color: #444; font-weight: bold; margin-bottom: -6px; }
+        .modal-box input {
+            background: #f9fbfb; color: #333; border: 1px solid #ccc;
+            padding: 10px; border-radius: 4px; font-size: 13px; outline: none;
+            box-sizing: border-box; width: 100%;
+        }
+        .modal-box input:focus { border-color: #0056b3; }
+        .modal-buttons { display: flex; gap: 8px; justify-content: flex-end; margin-top: 5px; }
+        .modal-buttons button { padding: 8px 15px; font-size: 13px; border-radius: 4px; cursor: pointer; border: none; font-weight: bold; width: auto; margin: 0; }
+        /* 👆 여기까지 👆 */
+
+
+
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>🧪 화학 약품 농도 & 비중 자동 계산기</h1>
+    
+    <div class="grid">
+        <div class="box">
+            <h3>1. 기본 정보 입력</h3>
+            <div class="input-group">
+                <label>약품 선택 (기본 55종 + 추가 약품)</label>
+                <div style="display: flex; gap: 10px;">
+                    <select id="chemSelect" onchange="calculate()" style="flex: 1;"></select>
+                    <button id="btnDelete" onclick="deleteChemical()" style="display: none;" title="사용자가 추가한 약품만 삭제 가능합니다.">삭제</button>
+                </div>
+            </div>
+            <div class="input-group">
+                <label>초기 농도 % (w/w)</label>
+                <input type="number" id="initConc" value="98" step="0.1" oninput="calculate()">
+            </div>
+            <div class="input-group">
+                <label>약품 사용량 (ton)</label>
+                <input type="number" id="usageAmount" value="100" step="0.1" oninput="calculate()">
+            </div>
+            <div class="input-group">
+                <label>희석수(H₂O) 사용량 (ton)</label>
+                <input type="number" id="waterAmount" value="54.35" step="0.1" oninput="calculate()">
+            </div>
+        </div>
+
+        <div class="box">
+            <h3>2. 원액 약품 정보</h3>
+            <div class="result-item">선택 약품: <span id="r_chemName">-</span></div>
+            <div class="result-item" style="color:#555; font-size:14px;">CAS No: <span id="r_cas" style="color:#555;">-</span></div>
+            <div class="result-item">초기 비중(곡선형 보간): <span id="r_initSG">-</span> g/mL</div>
+            <div class="result-item">약품 부피 량: <span id="r_initVol">-</span> m³</div>
+            <div class="result-item">분자량 (MW): <span id="r_mw">-</span> g/mol</div>
+            <div class="result-item">산/알칼리 당량: <span id="r_valence">-</span> 당량</div>
+            
+            <div class="result-item" style="margin-top: 15px; border-top: 1px dashed #ccc; padding-top: 10px;">
+                <span style="color:#333; font-size:13px;">[선택된 약품 기준 데이터 (농도 = 비중)]</span><br>
+                <div id="r_refData" style="font-size: 13px; color: #666; margin-top: 5px; line-height: 1.6; background: #eaeaea; padding: 8px; border-radius: 4px; word-break: keep-all;"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="box" style="margin-top: 20px;">
+        <h3>3. 희석 및 혼합 결과</h3>
+        <div class="grid" style="margin-top: 0;">
+            <div>
+                <div class="result-item">희석된 농도 (w/w): <span id="r_dilutedConcWW">-</span> %</div>
+                <div class="result-item">희석된 비중: <span id="r_dilutedSG">-</span> kg/L</div>
+                <div class="result-item">희석 혼합 총량: <span id="r_totalVol">-</span> m³</div>
+                <div class="result-item">혼합 농도 (w/v): <span id="r_dilutedConcWV">-</span> %</div>
+            </div>
+            <div>
+                <div class="result-item">노르말(N) 농도: <span id="r_nConc">-</span> N</div>
+                <div class="result-item">희석 약품 총 농도: <span id="r_mgL">-</span> mg/L</div>
+            </div>
+        </div>
+
+        <h4 style="margin-bottom: 5px;">4. 각 원소별 농도 계산 (mg/L)</h4>
+        <table>
+            <thead>
+                <tr>
+                    <th>원소</th>
+                    <th>원자량 총합</th>
+                    <th>분자량 대비 비율</th>
+                    <th>원소 농도 (mg/L)</th>
+                </tr>
+            </thead>
+            <tbody id="elementTableBody"></tbody>
+        </table>
+    </div>
+
+
+
+
+
+<div class="add-form-container">
+        <h4>
+            <span>[+] 사용자 맞춤 약품 추가하기 (웹 자동저장)</span>
+            <div style="display: flex; gap: 6px; align-items: center;">
+                <button id="syncSettingBtn" class="util-btn" style="background:#555;" title="동기화 설정">⚙️</button>
+                <button id="syncUpBtn" class="util-btn" style="background:#b1a995; color:#111;">구름저장☁️</button>
+                <button id="syncDownBtn" class="util-btn" style="background:#e7a86b; color:#111;">불러오기☁️</button>
+                <button class="util-btn" onclick="exportCustomData()" style="margin-left: 10px;">파일 생성</button>
+                <label class="util-btn" style="cursor: pointer; display: inline-block; margin: 0;">
+                    파일 불러오기 <input type="file" id="importFile" accept=".json" style="display: none;" onchange="importCustomData(event)">
+                </label>
+            </div>
+        </h4>
+
+
+
+
+
+        <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+            <input type="text" id="addName" placeholder="약품명 (예: 황산테스트)" style="flex: 2;">
+            <input type="text" id="addFormula" placeholder="분자식 (예: H2SO4)" style="flex: 2;">
+            <input type="text" id="addCas" placeholder="CAS (선택사항)" style="flex: 1.5;">
+            <input type="number" id="addValence" placeholder="당량 (기본: 1)" style="flex: 1;">
+        </div>
+        <label>농도(%) 및 비중 데이터 (최대 6개, 순서 무관)</label>
+        <div id="addDataRows"></div>
+        <button onclick="addNewChemical()">목록에 새 약품 추가 및 적용</button>
+    </div>
+
+
+
+
+</div>
+
+    <div class="modal-overlay" id="sync-modal">
+        <div class="modal-box">
+            <div style="font-weight:bold; font-size:18px; color:#0056b3; margin-bottom:5px; border-bottom:2px solid #0056b3; padding-bottom:5px;">☁️ 구름 동기화 설정</div>
+            <label>GitHub Token (ghp_...)</label>
+            <input type="text" id="modal-token" placeholder="토큰을 입력하세요">
+            <label>Gist ID (방 번호)</label>
+            <input type="text" id="modal-gistid" placeholder="비워두면 새로 생성됩니다">
+            <div class="modal-buttons">
+                <button id="modal-cancel" type="button" style="background:#888; color:#fff;">취소</button>
+                <button id="modal-save" type="button" style="background:#0056b3; color:#fff;">저장</button>
+            </div>
+        </div>
+    </div>
+    <script>
+
+
+
+
+
+// 보안 처리: 우클릭 및 소스보기 방지
+document.addEventListener('contextmenu', event => event.preventDefault());
+document.addEventListener('keydown', event => {
+    if (event.keyCode === 123 || 
+        (event.ctrlKey && event.shiftKey && (event.keyCode === 73 || event.keyCode === 74)) || 
+        (event.ctrlKey && event.keyCode === 85) || 
+        (event.ctrlKey && event.keyCode === 83)) { 
+        event.preventDefault();
+    }
+});
+
+// 기본 내장 55종 데이터 (절대 수정/삭제 안됨)
+const baseChemData = [{"name": "질산", "formula": "HNO3", "valence": 1, "data": [{"c": 5.0, "sg": 1.03}, {"c": 10.0, "sg": 1.06}, {"c": 17.0, "sg": 1.1}, {"c": 32.0, "sg": 1.2}, {"c": 65.0, "sg": 1.4}, {"c": 94.0, "sg": 1.5}], "cas": "7697-37-2"}, {"name": "염산", "formula": "HCl", "valence": 1, "data": [{"c": 5.0, "sg": 1.025}, {"c": 10.0, "sg": 1.05}, {"c": 20.0, "sg": 1.1}, {"c": 30.0, "sg": 1.15}, {"c": 38.0, "sg": 1.195}], "cas": "7647-01-0"}, {"name": "인산", "formula": "H3PO4", "valence": 3, "data": [{"c": 10.0, "sg": 1.05}, {"c": 35.0, "sg": 1.2}, {"c": 50.0, "sg": 1.33}, {"c": 60.0, "sg": 1.42}, {"c": 70.0, "sg": 1.52}, {"c": 80.0, "sg": 1.63}, {"c": 90.0, "sg": 1.74}, {"c": 95.0, "sg": 1.8}, {"c": 100.0, "sg": 1.87}], "cas": "7664-38-2"}, {"name": "플루오르화수소", "formula": "HF", "valence": 1, "data": [{"c": 10.0, "sg": 1.036}, {"c": 20.0, "sg": 1.07}, {"c": 30.0, "sg": 1.1}, {"c": 48.0, "sg": 1.15}], "cas": "7664-39-3"}, {"name": "염소산", "formula": "HClO3", "valence": 1, "data": [{"c": 5.0, "sg": 1.03}, {"c": 10.0, "sg": 1.058}, {"c": 18.0, "sg": 1.11}, {"c": 24.0, "sg": 1.156}], "cas": "7790-93-4"}, {"name": "아황산", "formula": "H2SO3", "valence": 2, "data": [{"c": 6.0, "sg": 1.029}, {"c": 10.0, "sg": 1.049}], "cas": "7782-99-2"}, {"name": "과염소산", "formula": "HClO4", "valence": 1, "data": [{"c": 6.0, "sg": 1.034}, {"c": 10.0, "sg": 1.059}, {"c": 18.0, "sg": 1.11}, {"c": 30.0, "sg": 1.2}, {"c": 45.0, "sg": 1.35}, {"c": 50.0, "sg": 1.41}, {"c": 60.0, "sg": 1.53}, {"c": 65.0, "sg": 1.6}, {"c": 70.0, "sg": 1.67}], "cas": "7601-90-3"}, {"name": "요오드산", "formula": "HIO3", "valence": 1, "data": [{"c": 6.0, "sg": 1.05}, {"c": 12.0, "sg": 1.11}, {"c": 22.0, "sg": 1.22}, {"c": 30.0, "sg": 1.32}, {"c": 35.0, "sg": 1.39}, {"c": 40.0, "sg": 1.46}], "cas": "7782-68-5"}, {"name": "과요오드산", "formula": "HIO4", "valence": 1, "data": [{"c": 5.0, "sg": 1.04}, {"c": 8.0, "sg": 1.07}, {"c": 12.0, "sg": 1.11}, {"c": 20.0, "sg": 1.21}, {"c": 28.0, "sg": 1.32}, {"c": 32.0, "sg": 1.38}], "cas": "10450-60-9"}, {"name": "크롬산무수물", "formula": "CrO3", "valence": 2, "data": [{"c": 4.0, "sg": 1.03}, {"c": 10.0, "sg": 1.076}, {"c": 14.0, "sg": 1.11}, {"c": 24.0, "sg": 1.2}, {"c": 35.0, "sg": 1.31}, {"c": 45.0, "sg": 1.43}, {"c": 50.0, "sg": 1.5}, {"c": 60.0, "sg": 1.66}], "cas": "1333-82-0"}, {"name": "수산화나트륨(가성소오다)", "formula": "NaOH", "valence": 1, "data": [{"c": 2.5, "sg": 1.029}, {"c": 6.0, "sg": 1.06}, {"c": 9.0, "sg": 1.1}, {"c": 15.0, "sg": 1.17}, {"c": 18.0, "sg": 1.2}, {"c": 28.0, "sg": 1.3}, {"c": 38.0, "sg": 1.4}, {"c": 48.0, "sg": 1.5}, {"c": 50.0, "sg": 1.53}], "cas": "1310-73-2"}, {"name": "수산화칼륨(가성소오다)", "formula": "KOH", "valence": 1, "data": [{"c": 6.0, "sg": 1.05}, {"c": 10.0, "sg": 1.08}, {"c": 12.0, "sg": 1.1}, {"c": 22.0, "sg": 1.2}, {"c": 32.0, "sg": 1.3}, {"c": 40.0, "sg": 1.4}, {"c": 48.0, "sg": 1.5}, {"c": 56.0, "sg": 1.6}], "cas": "1310-58-3"}, {"name": "암모니아", "formula": "NH3", "valence": 1, "data": [{"c": 0.45, "sg": 0.998}, {"c": 10.0, "sg": 0.95}, {"c": 15.0, "sg": 0.94}, {"c": 20.0, "sg": 0.92}, {"c": 30.0, "sg": 0.89}, {"c": 35.0, "sg": 0.88}], "cas": "7664-41-7"}, {"name": "황산", "formula": "H2SO4", "valence": 2, "data": [{"c": 3.0, "sg": 1.02}, {"c": 8.0, "sg": 1.05}, {"c": 10.0, "sg": 1.07}, {"c": 15.0, "sg": 1.105}, {"c": 20.0, "sg": 1.145}, {"c": 30.0, "sg": 1.225}, {"c": 40.0, "sg": 1.31}, {"c": 50.0, "sg": 1.4}, {"c": 60.0, "sg": 1.51}, {"c": 70.0, "sg": 1.615}, {"c": 80.0, "sg": 1.74}, {"c": 90.0, "sg": 1.82}, {"c": 100.0, "sg": 1.84}], "cas": "7664-93-9"}, {"name": "황산동", "formula": "CuSO4", "valence": 2, "data": [{"c": 1.0, "sg": 1.009}, {"c": 4.0, "sg": 1.04}, {"c": 6.0, "sg": 1.062}, {"c": 10.0, "sg": 1.107}, {"c": 14.0, "sg": 1.154}, {"c": 18.0, "sg": 1.206}], "cas": "7758-98-7"}, {"name": "질산나트륨", "formula": "NaNO3", "valence": 1, "data": [{"c": 10.0, "sg": 1.064}, {"c": 20.0, "sg": 1.142}, {"c": 30.0, "sg": 1.225}, {"c": 40.0, "sg": 1.317}], "cas": "7631-99-4"}, {"name": "인산나트륨", "formula": "NaPO4", "valence": 3, "data": [{"c": 2.0, "sg": 1.019}, {"c": 4.0, "sg": 1.04}, {"c": 8.0, "sg": 1.085}, {"c": 10.0, "sg": 1.108}], "cas": "7601-54-9"}, {"name": "인산수소나트륨", "formula": "Na2HPO4", "valence": 2, "data": [{"c": 1.0, "sg": 1.009}, {"c": 2.0, "sg": 1.02}, {"c": 4.0, "sg": 1.043}, {"c": 6.0, "sg": 1.067}], "cas": "7558-79-4"}, {"name": "피로인산", "formula": "Na4P2O7", "valence": 4, "data": [{"c": 1.0, "sg": 1.009}, {"c": 2.0, "sg": 1.019}, {"c": 3.0, "sg": 1.028}, {"c": 4.0, "sg": 1.037}], "cas": "7722-88-5"}, {"name": "크롬산", "formula": "Na2CrO4", "valence": 2, "data": [{"c": 10.0, "sg": 1.09}, {"c": 16.0, "sg": 1.05}, {"c": 20.0, "sg": 1.194}, {"c": 26.0, "sg": 1.26}], "cas": "7775-11-3"}, {"name": "중크롬산나트륨(피로크롬산)", "formula": "Na2Cr2O4", "valence": 2, "data": [{"c": 10.0, "sg": 1.07}, {"c": 22.0, "sg": 1.153}, {"c": 30.0, "sg": 1.207}, {"c": 35.0, "sg": 1.244}, {"c": 40.0, "sg": 1.279}, {"c": 50.0, "sg": 1.342}], "cas": "10588-01-9"}, {"name": "황산칼륨", "formula": "K2SO4", "valence": 2, "data": [{"c": 2.0, "sg": 1.014}, {"c": 5.0, "sg": 1.039}, {"c": 8.0, "sg": 1.064}, {"c": 10.0, "sg": 1.081}], "cas": "7778-80-5"}, {"name": "테트라붕산나트륨", "formula": "Na2B4O7", "valence": 2, "data": [{"c": 0.5, "sg": 1.004}, {"c": 1.0, "sg": 1.008}, {"c": 2.0, "sg": 1.017}, {"c": 3.5, "sg": 1.032}], "cas": "1330-43-4"}, {"name": "염화칼륨(시르빈)", "formula": "KCl", "valence": 1, "data": [{"c": 5.0, "sg": 1.03}, {"c": 10.0, "sg": 1.06}, {"c": 15.0, "sg": 1.097}, {"c": 20.0, "sg": 1.132}, {"c": 24.0, "sg": 1.162}], "cas": "7447-40-7"}, {"name": "옥화칼륨", "formula": "KI", "valence": 1, "data": [{"c": 10.0, "sg": 1.067}, {"c": 20.0, "sg": 1.166}, {"c": 30.0, "sg": 1.271}, {"c": 40.0, "sg": 1.395}, {"c": 50.0, "sg": 1.545}, {"c": 60.0, "sg": 1.73}], "cas": "7681-11-0"}, {"name": "질산칼륨", "formula": "KNO3", "valence": 1, "data": [{"c": 5.0, "sg": 1.029}, {"c": 10.0, "sg": 1.062}, {"c": 18.0, "sg": 1.118}, {"c": 24.0, "sg": 1.162}], "cas": "7757-79-1"}, {"name": "시안화칼륨", "formula": "KCN", "valence": 1, "data": [{"c": 4.0, "sg": 1.019}, {"c": 8.0, "sg": 1.04}, {"c": 12.0, "sg": 1.061}, {"c": 18.0, "sg": 1.093}], "cas": "151-50-8"}, {"name": "과망간산칼륨", "formula": "KMnO4", "valence": 1, "data": [{"c": 2.0, "sg": 1.013}, {"c": 4.0, "sg": 1.027}, {"c": 10.0, "sg": 1.041}], "cas": "7722-64-7"}, {"name": "플루오트화암모늄", "formula": "NH4F", "valence": 1, "data": [{"c": 2.0, "sg": 1.008}, {"c": 4.0, "sg": 1.0178}, {"c": 10.0, "sg": 1.042}], "cas": "12125-01-8"}, {"name": "황산크롬", "formula": "Cr2(SO4)3", "valence": 6, "data": [{"c": 10.0, "sg": 1.103}, {"c": 16.0, "sg": 1.172}, {"c": 20.0, "sg": 1.221}, {"c": 28.0, "sg": 1.332}], "cas": "10101-53-8"}, {"name": "황산크롬칼륨", "formula": "CrK(SO4)2", "valence": 1, "data": [{"c": 10.0, "sg": 1.089}, {"c": 20.0, "sg": 1.193}, {"c": 30.0, "sg": 1.315}, {"c": 40.0, "sg": 1.456}], "cas": "10141-00-1"}, {"name": "황산망간", "formula": "MnSO4", "valence": 2, "data": [{"c": 10.0, "sg": 1.102}, {"c": 16.0, "sg": 1.1714}, {"c": 20.0, "sg": 1.22}, {"c": 26.0, "sg": 1.2997}, {"c": 30.0, "sg": 1.3565}], "cas": "7785-87-7"}, {"name": "염화철(II)", "formula": "FeCl2", "valence": 2, "data": [{"c": 10.0, "sg": 1.092}, {"c": 14.0, "sg": 1.1336}, {"c": 20.0, "sg": 1.199}, {"c": 25.0, "sg": 1.2596}], "cas": "7758-94-3"}, {"name": "염화제2철", "formula": "FeCl3", "valence": 3, "data": [{"c": 10.0, "sg": 1.085}, {"c": 16.0, "sg": 1.142}, {"c": 20.0, "sg": 1.182}, {"c": 30.0, "sg": 1.291}, {"c": 35.0, "sg": 1.353}, {"c": 40.0, "sg": 1.417}, {"c": 45.0, "sg": 1.485}, {"c": 50.0, "sg": 1.551}], "cas": "7758-89-6"}, {"name": "황산철(II)", "formula": "FeSO4", "valence": 2, "data": [{"c": 10.0, "sg": 1.1}, {"c": 12.0, "sg": 1.122}, {"c": 16.0, "sg": 1.167}, {"c": 20.0, "sg": 1.213}], "cas": "7720-78-7"}, {"name": "황산제2철", "formula": "Fe2(SO4)3", "valence": 6, "data": [{"c": 10.0, "sg": 1.084}, {"c": 12.0, "sg": 1.103}, {"c": 25.0, "sg": 1.241}, {"c": 30.0, "sg": 1.307}, {"c": 40.0, "sg": 1.449}, {"c": 45.0, "sg": 1.528}], "cas": "10028-22-5"}, {"name": "염산암모늄", "formula": "NH4Cl", "valence": 1, "data": [{"c": 2.0, "sg": 1.0045}, {"c": 10.0, "sg": 1.0286}, {"c": 20.0, "sg": 1.056}, {"c": 26.0, "sg": 1.0726}], "cas": "12125-02-9"}, {"name": "황산암모늄", "formula": "(NH4)2SO4", "valence": 2, "data": [{"c": 10.0, "sg": 1.057}, {"c": 20.0, "sg": 1.1154}, {"c": 30.0, "sg": 1.172}, {"c": 40.0, "sg": 1.227}, {"c": 50.0, "sg": 1.2825}], "cas": "7783-20-2"}, {"name": "질산암모늄", "formula": "NH4NO3", "valence": 1, "data": [{"c": 10.0, "sg": 1.039}, {"c": 20.0, "sg": 1.082}, {"c": 30.0, "sg": 1.127}, {"c": 40.0, "sg": 1.175}, {"c": 50.0, "sg": 1.225}, {"c": 55.0, "sg": 1.252}], "cas": "6484-52-2"}, {"name": "탄산암모늄", "formula": "(NH4)2CO3", "valence": 2, "data": [{"c": 6.0, "sg": 1.019}, {"c": 10.0, "sg": 1.033}, {"c": 20.0, "sg": 1.067}, {"c": 30.0, "sg": 1.1}, {"c": 35.0, "sg": 1.115}, {"c": 40.0, "sg": 1.129}], "cas": "506-87-6"}, {"name": "황산칼슘", "formula": "CaSO4", "valence": 2, "data": [{"c": 0.198, "sg": 1.0012}], "cas": "7778-18-9"}, {"name": "염화마그네슘", "formula": "MgCl2", "valence": 2, "data": [{"c": 10.0, "sg": 1.08}, {"c": 16.0, "sg": 1.134}, {"c": 20.0, "sg": 1.17}, {"c": 28.0, "sg": 1.248}], "cas": "7786-30-3"}, {"name": "황산마그네슘", "formula": "MgSO4", "valence": 2, "data": [{"c": 6.0, "sg": 1.06}, {"c": 10.0, "sg": 1.1}, {"c": 16.0, "sg": 1.17}, {"c": 22.0, "sg": 1.244}, {"c": 26.0, "sg": 1.2961}], "cas": "7487-88-9"}, {"name": "염화칼슘", "formula": "CaCl2", "valence": 2, "data": [{"c": 10.0, "sg": 1.083}, {"c": 20.0, "sg": 1.177}, {"c": 30.0, "sg": 1.281}, {"c": 40.0, "sg": 1.3957}], "cas": "10043-52-4"}, {"name": "질산칼슘", "formula": "Ca(NO3)2", "valence": 2, "data": [{"c": 10.0, "sg": 1.077}, {"c": 20.0, "sg": 1.1636}, {"c": 25.0, "sg": 1.211}, {"c": 30.0, "sg": 1.259}, {"c": 35.0, "sg": 1.311}], "cas": "10124-37-5"}, {"name": "염화바륨", "formula": "BaCl2", "valence": 2, "data": [{"c": 10.0, "sg": 1.092}, {"c": 14.0, "sg": 1.134}, {"c": 20.0, "sg": 1.203}, {"c": 26.0, "sg": 1.279}], "cas": "10361-37-2"}, {"name": "황산알루미늄", "formula": "Al2(SO4)3", "valence": 6, "data": [{"c": 10.0, "sg": 1.105}, {"c": 16.0, "sg": 1.176}, {"c": 20.0, "sg": 1.266}, {"c": 26.0, "sg": 1.306}], "cas": "10043-01-3"}, {"name": "황산알루미늄칼륨", "formula": "AlK(SO4)2", "valence": 1, "data": [{"c": 1.0, "sg": 1.0079}, {"c": 2.0, "sg": 1.0174}], "cas": "10043-67-1"}, {"name": "질산우라닐", "formula": "UO2(NO3)2", "valence": 2, "data": [{"c": 10.0, "sg": 1.072}, {"c": 14.0, "sg": 1.111}, {"c": 22.0, "sg": 1.2}, {"c": 30.0, "sg": 1.3}, {"c": 38.0, "sg": 1.42}, {"c": 46.0, "sg": 1.559}], "cas": "10102-06-4"}, {"name": "플루오르화나트륨", "formula": "NaF", "valence": 1, "data": [{"c": 1.0, "sg": 1.0092}, {"c": 5.0, "sg": 1.0515}], "cas": "7681-49-4"}, {"name": "염화나트륨", "formula": "NaCl", "valence": 1, "data": [{"c": 5.0, "sg": 1.036}, {"c": 10.0, "sg": 1.074}, {"c": 15.0, "sg": 1.127}, {"c": 20.0, "sg": 1.1525}, {"c": 26.0, "sg": 1.202}], "cas": "7647-14-5"}, {"name": "황산나트륨 (10°C)", "formula": "Na2SO4", "valence": 2, "data": [{"c": 1.0, "sg": 1.0089}, {"c": 8.0, "sg": 1.0753}], "cas": "7757-82-6"}, {"name": "황산나트륨 (25°C)", "formula": "Na2SO4", "valence": 2, "data": [{"c": 8.0, "sg": 1.0701}, {"c": 16.0, "sg": 1.1479}, {"c": 22.0, "sg": 1.21}], "cas": "7757-82-6"}, {"name": "질산은", "formula": "AgNO3", "valence": 1, "data": [{"c": 10.0, "sg": 1.088}, {"c": 14.0, "sg": 1.1284}, {"c": 20.0, "sg": 1.194}, {"c": 25.0, "sg": 1.393}, {"c": 30.0, "sg": 1.32}, {"c": 40.0, "sg": 1.474}, {"c": 45.0, "sg": 1.565}, {"c": 50.0, "sg": 1.686}, {"c": 55.0, "sg": 1.786}, {"c": 60.0, "sg": 1.916}], "cas": "7761-88-8"}, {"name": "황산아연", "formula": "ZnSO4", "valence": 2, "data": [{"c": 2.0, "sg": 1.019}, {"c": 10.0, "sg": 1.107}, {"c": 14.0, "sg": 1.155}, {"c": 20.0, "sg": 1.232}, {"c": 25.0, "sg": 1.304}, {"c": 30.0, "sg": 1.378}], "cas": "7733-02-0"}];
+
+// 사용자가 추가한 약품 데이터를 담을 배열
+let customChemData = [];
+// 현재 화면에 표시될 전체 약품 리스트 (base + custom)
+let chemData = [];
+
+const atomicWeights = { H: 1, N: 14, O: 16, Cl: 35.5, P: 31, F: 19, S: 32, I: 127, Cr: 52, Na: 23, K: 39, Cu: 63.5, B: 10.8, Mn: 55, Fe: 55.8, C: 12, Ca: 40, Mg: 24.3, Ba: 137.3, Al: 27, U: 238, Ag: 108, Zn: 65.4 };
+
+// 초기 세팅
+window.onload = function() {
+    // 1. LocalStorage(웹 자동 저장)에서 사용자 데이터 복원
+    const savedData = localStorage.getItem('customChemData');
+    if (savedData) {
+        try {
+            customChemData = JSON.parse(savedData);
+        } catch (e) {
+            console.error("저장된 데이터 불러오기 실패", e);
+        }
+    }
+    
+    updateGlobalChemData();
+    
+    // 2. 추가 폼 6칸 UI 생성
+    const addDataRows = document.getElementById('addDataRows');
+    for(let i=1; i<=6; i++) {
+        addDataRows.innerHTML += `
+            <div class="data-row">
+                <input type="number" id="addC${i}" placeholder="${i}번 농도(%)" step="0.1">
+                <input type="number" id="addS${i}" placeholder="${i}번 비중" step="0.001">
+            </div>`;
+    }
+    
+    // 3. 페이지가 로드되면 황산 기본 선택
+    document.getElementById('chemSelect').value = 13;
+    calculate();
+};
+
+// 전체 데이터 갱신 및 로컬 저장소 동기화
+function updateGlobalChemData() {
+    chemData = [...baseChemData, ...customChemData];
+    localStorage.setItem('customChemData', JSON.stringify(customChemData)); 
+    renderChemSelect();
+}
+
+function renderChemSelect() {
+    const select = document.getElementById('chemSelect');
+    const currentValue = select.value;
+    select.innerHTML = '';
+    chemData.forEach((chem, index) => {
+        let option = document.createElement('option');
+        option.value = index;
+        let prefix = index >= 55 ? "[추가됨] " : "";
+        option.text = `${index + 1}. ${prefix}${chem.name} (${chem.formula})`;
+        select.appendChild(option);
+    });
+    // 데이터가 갱신되어도 기존에 선택된 값을 유지
+    if(currentValue && currentValue < chemData.length) {
+        select.value = currentValue;
+    }
+}
+
+// 사용자 맞춤 약품 추가하기 로직
+function addNewChemical() {
+    const name = document.getElementById('addName').value.trim();
+    const formula = document.getElementById('addFormula').value.trim();
+    const cas = document.getElementById('addCas').value.trim() || "정보없음";
+    let valence = parseInt(document.getElementById('addValence').value);
+    if (isNaN(valence) || valence <= 0) valence = 1;
+
+    if (!name || !formula) return alert('약품명과 분자식을 모두 입력해주세요.');
+
+    let data = [];
+    for (let i = 1; i <= 6; i++) {
+        let c = parseFloat(document.getElementById(`addC${i}`).value);
+        let s = parseFloat(document.getElementById(`addS${i}`).value);
+        if (!isNaN(c) && !isNaN(s)) {
+            data.push({c: c, sg: s});
+        }
+    }
+    
+    if (data.length < 2) return alert('정확한 계산을 위해 최소 2개 이상의 농도/비중 데이터 쌍이 필요합니다.');
+
+    // 농도 오름차순 정렬
+    data.sort((a, b) => a.c - b.c);
+
+    customChemData.push({ name, formula, valence, cas, data });
+    updateGlobalChemData();
+    document.getElementById('chemSelect').value = chemData.length - 1;
+    calculate();
+    alert(`[${name}] 약품이 성공적으로 추가되어 저장되었습니다!`);
+    
+    // 추가 후 폼 초기화
+    document.getElementById('addName').value = '';
+    document.getElementById('addFormula').value = '';
+    document.getElementById('addCas').value = '';
+    document.getElementById('addValence').value = '';
+    for(let i=1; i<=6; i++) {
+        document.getElementById(`addC${i}`).value = '';
+        document.getElementById(`addS${i}`).value = '';
+    }
+}
+
+// 사용자 약품 삭제 로직
+function deleteChemical() {
+    const index = parseInt(document.getElementById('chemSelect').value);
+    if(index >= 55) {
+        if(confirm(`[${chemData[index].name}] 약품을 목록에서 완전히 삭제하시겠습니까?`)) {
+            customChemData.splice(index - 55, 1);
+            updateGlobalChemData();
+            document.getElementById('chemSelect').value = 13; // 삭제 후 황산으로 자동 복귀
+            calculate();
+        }
+    }
+}
+
+// 📌 [기능 추가]: 파일 내보내기 (ChemicalList.json 파일 다운로드)
+function exportCustomData() {
+    if(customChemData.length === 0) return alert("저장할 사용자 추가 약품 데이터가 없습니다.");
+    
+    // JSON 데이터를 파일 형태로 변환
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(customChemData, null, 2));
+    const downloadAnchorNode = document.createElement('a');
+    downloadAnchorNode.setAttribute("href", dataStr);
+    downloadAnchorNode.setAttribute("download", "ChemicalList.json"); // 파일명 고정
+    
+    document.body.appendChild(downloadAnchorNode); 
+    downloadAnchorNode.click();
+    downloadAnchorNode.remove();
+}
+
+// 📌 [기능 추가]: 파일 불러오기 (JSON 업로드 및 병합)
+function importCustomData(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const importedData = JSON.parse(e.target.result);
+            if(Array.isArray(importedData)) {
+                // 기존 사용자 데이터에 불러온 데이터를 병합
+                customChemData = [...customChemData, ...importedData];
+                updateGlobalChemData();
+                alert(`성공적으로 데이터를 불러왔습니다.`);
+            } else {
+                alert("올바른 ChemicalList.json 파일 형식이 아닙니다.");
+            }
+        } catch (err) {
+            alert("유효하지 않은 파일입니다. JSON 형식인지 확인해주세요.");
+        }
+    };
+    reader.readAsText(file);
+    event.target.value = ''; // 동일한 파일을 연달아 불러올 수 있도록 인풋 초기화
+}
+
+// 분자식에서 개별 원소 추출
+function parseFormula(formula) {
+    let expanded = formula;
+    while(expanded.includes('(')) {
+        expanded = expanded.replace(/\(([A-Za-z0-9]+)\)(\d*)/g, (match, inner, mult) => {
+            let m = parseInt(mult) || 1;
+            return inner.replace(/([A-Z][a-z]?)(\d*)/g, (m2, elem, cnt) => {
+                let c = parseInt(cnt) || 1;
+                return elem + (c * m);
+            });
+        });
+    }
+    
+    let mw = 0;
+    let elements = {};
+    let regex = /([A-Z][a-z]?)(\d*)/g;
+    let match;
+    while((match = regex.exec(expanded)) !== null) {
+        let el = match[1];
+        let cnt = parseInt(match[2]) || 1;
+        if (!elements[el]) elements[el] = 0;
+        elements[el] += cnt;
+        mw += (atomicWeights[el] || 0) * cnt;
+    }
+    return { mw: mw, elements: elements };
+}
+
+// 고급 스플라인 보간법 (곡선 형태 유지)
+function getSplineInterpolatedSG(conc, dataPoints) {
+    let n = dataPoints.length;
+    if (n === 1) return dataPoints[0].sg;
+    if (conc <= dataPoints[0].c) return dataPoints[0].sg;
+    if (conc >= dataPoints[n - 1].c) return dataPoints[n - 1].sg;
+    
+    let x = dataPoints.map(p => p.c);
+    let y = dataPoints.map(p => p.sg);
+    
+    let delta = [], m = [];
+    for (let i = 0; i < n - 1; i++) {
+        delta.push((y[i + 1] - y[i]) / (x[i + 1] - x[i]));
+    }
+    m.push(delta[0]);
+    for (let i = 1; i < n - 1; i++) {
+        if (delta[i - 1] * delta[i] <= 0) {
+            m.push(0);
+        } else {
+            m.push(2 / (1 / delta[i - 1] + 1 / delta[i]));
+        }
+    }
+    m.push(delta[n - 2]);
+
+    let i = 0;
+    while (conc >= x[i + 1]) i++;
+    
+    let h = x[i + 1] - x[i];
+    let t = (conc - x[i]) / h;
+    let t2 = t * t;
+    let t3 = t2 * t;
+    
+    let h00 = 2 * t3 - 3 * t2 + 1;
+    let h10 = t3 - 2 * t2 + t;
+    let h01 = -2 * t3 + 3 * t2;
+    let h11 = t3 - t2;
+    
+    return h00 * y[i] + h10 * h * m[i] + h01 * y[i + 1] + h11 * h * m[i + 1];
+}
+
+// 메인 계산 함수
+function calculate() {
+    const index = parseInt(document.getElementById('chemSelect').value);
+    const chem = chemData[index];
+    if(!chem) return; // 초기 로딩 방어
+
+    const initConc = parseFloat(document.getElementById('initConc').value) || 0;
+    const usageAmount = parseFloat(document.getElementById('usageAmount').value) || 0;
+    const waterAmount = parseFloat(document.getElementById('waterAmount').value) || 0;
+
+    // 추가된 사용자 약품일 때만 삭제 버튼 활성화
+    document.getElementById('btnDelete').style.display = index >= 55 ? 'inline-block' : 'none';
+
+    const initSG = getSplineInterpolatedSG(initConc, chem.data);
+    const initVol = initSG > 0 ? usageAmount / initSG : 0;
+    
+    const parsed = parseFormula(chem.formula);
+    const mw = parsed.mw;
+
+    const activeMass = usageAmount * (initConc / 100);
+    const totalMass = usageAmount + waterAmount;
+    const dilutedConcWW = totalMass > 0 ? (activeMass / totalMass) * 100 : 0;
+
+    const dilutedSG = getSplineInterpolatedSG(dilutedConcWW, chem.data);
+    const totalVol = dilutedSG > 0 ? totalMass / dilutedSG : 0;
+
+    const dilutedConcWV = dilutedConcWW * dilutedSG;
+    const mgL = dilutedConcWV * 10000; 
+
+    const eqWeight = mw / chem.valence;
+    const nConc = eqWeight > 0 ? (dilutedSG * 1000 * (dilutedConcWW / 100)) / eqWeight : 0;
+
+    document.getElementById('r_chemName').innerText = `${chem.name} (${chem.formula})`;
+    document.getElementById('r_cas').innerText = chem.cas || "추가된 정보";
+    document.getElementById('r_initSG').innerText = initSG.toFixed(4);
+    document.getElementById('r_initVol').innerText = initVol.toFixed(2);
+    document.getElementById('r_mw').innerText = mw.toFixed(2);
+    document.getElementById('r_valence').innerText = chem.valence;
+
+    // 내장 기준 데이터 텍스트 화면 노출 로직
+    const refDataStrs = chem.data.map(p => `<span style="display:inline-block; margin-right:10px; padding: 2px 4px; background:#fff; border:1px solid #ccc; border-radius:3px;">${p.c}% = ${p.sg}</span>`);
+    document.getElementById('r_refData').innerHTML = refDataStrs.join('');
+
+    document.getElementById('r_dilutedConcWW').innerText = dilutedConcWW.toFixed(2);
+    document.getElementById('r_dilutedSG').innerText = dilutedSG.toFixed(4);
+    document.getElementById('r_totalVol').innerText = totalVol.toFixed(2);
+    document.getElementById('r_dilutedConcWV').innerText = dilutedConcWV.toFixed(2);
+    
+    document.getElementById('r_nConc').innerText = nConc.toFixed(2);
+    document.getElementById('r_mgL').innerText = mgL.toLocaleString('en-US', {maximumFractionDigits: 1});
+
+    const tbody = document.getElementById('elementTableBody');
+    tbody.innerHTML = '';
+    
+    if(mw > 0) {
+        for (const [el, cnt] of Object.entries(parsed.elements)) {
+            const elTotalWeight = (atomicWeights[el] || 0) * cnt;
+            const ratio = elTotalWeight / mw;
+            const elMgL = ratio * mgL;
+            
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${el}${cnt > 1 ? cnt : ''}</td>
+                <td>${elTotalWeight.toFixed(2)}</td>
+                <td>${(ratio * 100).toFixed(1)} %</td>
+                <td style="font-weight: bold; color: #0056b3;">${elMgL.toLocaleString('en-US', {maximumFractionDigits: 1})}</td>
+            `;
+            tbody.appendChild(tr);
+        }
+    } else {
+        tbody.innerHTML = `<tr><td colspan="4" style="color:#888;">원자량 정보가 없는 분자식입니다.</td></tr>`;
+    }
+}
+
+
+
+// 👇👇 여기부터 클라우드 동기화 (Gist) 로직 추가 👇👇
+const SYNC_KEY = 'chemical_calc_sync_info';
+let syncInfo = JSON.parse(localStorage.getItem(SYNC_KEY) || '{"githubToken":"","gistId":""}');
+function saveSyncInfo() { localStorage.setItem(SYNC_KEY, JSON.stringify(syncInfo)); }
+
+document.getElementById('syncSettingBtn').addEventListener('click', () => {
+    document.getElementById('modal-token').value = syncInfo.githubToken || '';
+    document.getElementById('modal-gistid').value = syncInfo.gistId || '';
+    document.getElementById('sync-modal').style.display = 'flex';
+});
+
+document.getElementById('modal-cancel').addEventListener('click', () => {
+    document.getElementById('sync-modal').style.display = 'none';
+});
+
+document.getElementById('modal-save').addEventListener('click', () => {
+    syncInfo.githubToken = document.getElementById('modal-token').value.trim();
+    syncInfo.gistId = document.getElementById('modal-gistid').value.trim();
+    saveSyncInfo();
+    document.getElementById('sync-modal').style.display = 'none';
+    alert('⚙️ 동기화 설정이 저장되었습니다.');
+});
+
+document.getElementById('syncUpBtn').addEventListener('click', () => {
+    if(!syncInfo.githubToken) return alert("먼저 ⚙️ 버튼을 눌러 GitHub 토큰을 설정해 주세요.");
+    const btn = document.getElementById('syncUpBtn');
+    const originalText = btn.textContent;
+    btn.textContent = "저장중...";
+
+    const content = JSON.stringify(customChemData, null, 2); // ❗사용자 데이터만 안전하게 포장❗
+
+    if(!syncInfo.gistId) {
+        fetch("https://api.github.com/gists", {
+            method: "POST",
+            headers: { "Accept": "application/vnd.github+json", "Authorization": `Bearer ${syncInfo.githubToken}` },
+            body: JSON.stringify({
+                "description": "Chemical Calculator Custom Data",
+                "public": false,
+                "files": { "chemical_custom_data.json": { "content": content } }
+            })
+        }).then(res => res.json()).then(data => {
+            syncInfo.gistId = data.id;
+            saveSyncInfo();
+            btn.textContent = originalText;
+            alert(`새로운 구름 저장소가 만들어졌습니다! ☁️\n\n발급된 Gist ID:\n${data.id}\n\n다른 PC에서 불러올 때 설정(⚙️)에 이 ID를 넣으세요!`);
+        }).catch(err => { btn.textContent = originalText; alert("업로드 실패: " + err); });
+    } else {
+        fetch(`https://api.github.com/gists/${syncInfo.gistId}`, {
+            method: "PATCH",
+            headers: { "Accept": "application/vnd.github+json", "Authorization": `Bearer ${syncInfo.githubToken}` },
+            body: JSON.stringify({ "files": { "chemical_custom_data.json": { "content": content } } })
+        }).then(res => {
+            btn.textContent = originalText;
+            if(res.ok) alert("구름에 성공적으로 업데이트 되었습니다! ☁️");
+            else alert("업로드 실패. 토큰이나 ID를 다시 확인하세요.");
+        }).catch(err => { btn.textContent = originalText; alert("업로드 오류: " + err); });
+    }
+});
+
+document.getElementById('syncDownBtn').addEventListener('click', () => {
+    if(!syncInfo.githubToken || !syncInfo.gistId) return alert("먼저 ⚙️ 버튼을 눌러 GitHub 토큰과 Gist ID를 모두 설정해 주세요.");
+    const btn = document.getElementById('syncDownBtn');
+    const originalText = btn.textContent;
+    btn.textContent = "불러오는중...";
+
+    fetch(`https://api.github.com/gists/${syncInfo.gistId}`, {
+        headers: { "Accept": "application/vnd.github+json", "Authorization": `Bearer ${syncInfo.githubToken}` }
+    }).then(res => res.json()).then(data => {
+        btn.textContent = originalText;
+        const file = data.files && data.files["chemical_custom_data.json"];
+        if(file) {
+            try {
+                const imported = JSON.parse(file.content);
+                customChemData = imported; // 데이터 덮어쓰기
+                updateGlobalChemData(); // UI 목록 및 로컬스토리지 갱신
+                calculate(); // 화면 재계산
+                alert("구름에서 사용자 약품 데이터를 성공적으로 불러왔습니다! ☁️");
+            } catch(e) { alert("데이터 파싱 오류가 발생했습니다."); }
+        } else { alert("저장된 약품 데이터를 찾을 수 없습니다."); }
+    }).catch(err => { btn.textContent = originalText; alert("다운로드 오류: " + err); });
+});
+// 👆👆 여기까지 클라우드 동기화 로직 👆👆
+
+
+</script>
+
+</body>
+</html>
