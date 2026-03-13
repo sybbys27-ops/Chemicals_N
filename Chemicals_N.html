@@ -415,16 +415,28 @@ function parseFormula(formula) {
     return { mw: mw, elements: elements };
 }
 
-// 고급 스플라인 보간법 (곡선 형태 유지)
+// 고급 스플라인 보간법 + 범위 이탈 시 선형 외삽법(직선 연장) 적용
 function getSplineInterpolatedSG(conc, dataPoints) {
     let n = dataPoints.length;
+    if (n === 0) return 1.0;
     if (n === 1) return dataPoints[0].sg;
-    if (conc <= dataPoints[0].c) return dataPoints[0].sg;
-    if (conc >= dataPoints[n - 1].c) return dataPoints[n - 1].sg;
     
     let x = dataPoints.map(p => p.c);
     let y = dataPoints.map(p => p.sg);
     
+    // 👇 1. 하한값 미만일 때: 첫 번째와 두 번째 점의 기울기를 이용해 아래로 직선 연장
+    if (conc < x[0]) {
+        let slope = (y[1] - y[0]) / (x[1] - x[0]);
+        return y[0] - slope * (x[0] - conc);
+    }
+
+    // 👇 2. 상한값 초과일 때: 마지막과 그 앞 점의 기울기를 이용해 위로 직선 연장
+    if (conc > x[n - 1]) {
+        let slope = (y[n - 1] - y[n - 2]) / (x[n - 1] - x[n - 2]);
+        return y[n - 1] + slope * (conc - x[n - 1]);
+    }
+    
+    // 👇 3. 데이터 범위 내일 때: 기존 스플라인 곡선 유지
     let delta = [], m = [];
     for (let i = 0; i < n - 1; i++) {
         delta.push((y[i + 1] - y[i]) / (x[i + 1] - x[i]));
@@ -440,7 +452,7 @@ function getSplineInterpolatedSG(conc, dataPoints) {
     m.push(delta[n - 2]);
 
     let i = 0;
-    while (conc >= x[i + 1]) i++;
+    while (i < n - 2 && conc >= x[i + 1]) i++; // 범위 안전장치
     
     let h = x[i + 1] - x[i];
     let t = (conc - x[i]) / h;
@@ -454,7 +466,7 @@ function getSplineInterpolatedSG(conc, dataPoints) {
     
     return h00 * y[i] + h10 * h * m[i] + h01 * y[i + 1] + h11 * h * m[i + 1];
 }
-
+        
 // 메인 계산 함수
 function calculate() {
     const index = parseInt(document.getElementById('chemSelect').value);
@@ -620,4 +632,5 @@ document.getElementById('syncDownBtn').addEventListener('click', () => {
 </body>
 
 </html>
+
 
